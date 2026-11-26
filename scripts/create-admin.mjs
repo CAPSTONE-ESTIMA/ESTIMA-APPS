@@ -8,11 +8,12 @@ import { z } from "zod";
 
 config({ path: ".env.local", quiet: true });
 config({ quiet: true });
-if (!process.env.DATABASE_URL) throw new Error("Set DATABASE_URL in .env.local first.");
+const connectionString = process.env.DATABASE_URL_UNPOOLED ?? process.env.DATABASE_URL;
+if (!connectionString) throw new Error("Set DATABASE_URL in .env.local first.");
 let muted = false;
 const output = new Writable({ write(chunk, encoding, done) { if (!muted) process.stdout.write(chunk, encoding); done(); } });
 const terminal = createInterface({ input: process.stdin, output, terminal: Boolean(process.stdin.isTTY) });
-const sql = postgres(process.env.DATABASE_URL, { max: 1 });
+const sql = postgres(connectionString, { max: 1 });
 try {
   const name = process.env.ESTIMA_ADMIN_NAME ?? await terminal.question("Admin name: ");
   const email = process.env.ESTIMA_ADMIN_EMAIL ?? await terminal.question("Admin email: ");

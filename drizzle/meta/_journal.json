@@ -15,6 +15,34 @@
       "when": 1790866833561,
       "tag": "0001_special_legion",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1795710204269,
+      "tag": "0002_sloppy_sunset_bain",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1795711375844,
+      "tag": "0003_steady_exodus",
+      "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1795712142153,
+      "tag": "0004_fast_vampiro",
+      "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1795714871698,
+      "tag": "0005_legal_franklin_richards",
+      "breakpoints": true
     }
   ]
 }
