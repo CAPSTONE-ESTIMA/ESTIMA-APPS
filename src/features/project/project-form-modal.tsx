@@ -38,6 +38,8 @@ export function ProjectFormModal({
           name: project.name,
           client: project.client,
           location: project.location ?? "",
+          startDate: project.startDate ?? "",
+          endDate: project.endDate ?? "",
           status: project.status,
         }
       : {
@@ -45,6 +47,8 @@ export function ProjectFormModal({
           name: "",
           client: "",
           location: "",
+          startDate: "",
+          endDate: "",
           status: "active",
         },
   });
@@ -82,7 +86,7 @@ export function ProjectFormModal({
         if (e.target === e.currentTarget && !isSubmitting) onClose();
       }}
     >
-      <div className="w-full max-w-lg rounded-md border border-border bg-white shadow-xl">
+      <div className="max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-md border border-border bg-white shadow-xl">
         <div className="flex items-center justify-between border-b border-border px-6 py-4">
           <div>
             <p className="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">
@@ -187,6 +191,38 @@ export function ProjectFormModal({
             {errors.location && (
               <p className="mt-1 text-xs text-red-600">{errors.location.message}</p>
             )}
+          </div>
+
+          <div className="grid gap-4 sm:grid-cols-2">
+            <div>
+              <label htmlFor="project-start" className="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-slate-700">
+                Start Date
+              </label>
+              <input
+                id="project-start"
+                type="date"
+                className="w-full rounded-md border border-slate-300 bg-slate-50 px-3 py-2 font-mono text-xs text-foreground focus:border-blue-600 focus:bg-white focus:outline-none"
+                {...register("startDate")}
+              />
+              {errors.startDate && (
+                <p className="mt-1 text-xs text-red-600">{errors.startDate.message}</p>
+              )}
+            </div>
+
+            <div>
+              <label htmlFor="project-end" className="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-slate-700">
+                End Date
+              </label>
+              <input
+                id="project-end"
+                type="date"
+                className="w-full rounded-md border border-slate-300 bg-slate-50 px-3 py-2 font-mono text-xs text-foreground focus:border-blue-600 focus:bg-white focus:outline-none"
+                {...register("endDate")}
+              />
+              {errors.endDate && (
+                <p className="mt-1 text-xs text-red-600">{errors.endDate.message}</p>
+              )}
+            </div>
           </div>
 
           {serverError && (

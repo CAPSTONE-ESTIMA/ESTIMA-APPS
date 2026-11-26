@@ -1,8 +1,12 @@
 import "server-only";
-import { and, desc, eq } from "drizzle-orm";
+import { and, desc, eq, or } from "drizzle-orm";
 import { getDb } from "@/server/db";
-import { auditLogs, projectMembers, projects } from "@/server/db/schema";
-import type { ProjectInput, ProjectStatus } from "@/features/project/schema";
+import { auditLogs, projectMembers, projects, user } from "@/server/db/schema";
+import type {
+  ProjectConfiguration,
+  ProjectInput,
+  ProjectStatus,
+} from "@/features/project/schema";
 
 export async function findProjectsForUser(userId: string) {
   return getDb()
@@ -12,6 +16,8 @@ export async function findProjectsForUser(userId: string) {
       name: projects.name,
       client: projects.client,
       location: projects.location,
+      startDate: projects.startDate,
+      endDate: projects.endDate,
       status: projects.status,
       role: projectMembers.role,
       createdAt: projects.createdAt,
@@ -30,7 +36,10 @@ export async function findProjectByIdForUser(projectId: string, userId: string) 
       name: projects.name,
       client: projects.client,
       location: projects.location,
+      startDate: projects.startDate,
+      endDate: projects.endDate,
       status: projects.status,
+      configuration: projects.configuration,
       role: projectMembers.role,
       createdAt: projects.createdAt,
     })
@@ -39,6 +48,47 @@ export async function findProjectByIdForUser(projectId: string, userId: string) 
     .where(and(eq(projectMembers.projectId, projectId), eq(projectMembers.userId, userId)))
     .limit(1);
   return rows[0] ?? null;
+}
+
+export async function findProjectByIdOrCodeForUser(keyOrId: string, userId: string) {
+  const normalizedCode = keyOrId.trim().toUpperCase();
+  const rows = await getDb()
+    .select({
+      id: projects.id,
+      code: projects.code,
+      name: projects.name,
+      client: projects.client,
+      location: projects.location,
+      startDate: projects.startDate,
+      endDate: projects.endDate,
+      status: projects.status,
+      configuration: projects.configuration,
+      role: projectMembers.role,
+      createdAt: projects.createdAt,
+    })
+    .from(projectMembers)
+    .innerJoin(projects, eq(projectMembers.projectId, projects.id))
+    .where(
+      and(
+        eq(projectMembers.userId, userId),
+        or(eq(projects.id, keyOrId), eq(projects.code, normalizedCode))
+      )
+    )
+    .limit(1);
+  return rows[0] ?? null;
+}
+
+export async function findMembersOfProject(projectId: string) {
+  return getDb()
+    .select({
+      userId: projectMembers.userId,
+      userName: user.name,
+      userEmail: user.email,
+      role: projectMembers.role,
+    })
+    .from(projectMembers)
+    .innerJoin(user, eq(projectMembers.userId, user.id))
+    .where(eq(projectMembers.projectId, projectId));
 }
 
 export async function createProjectWithOwner(userId: string, input: ProjectInput) {
@@ -53,6 +103,8 @@ export async function createProjectWithOwner(userId: string, input: ProjectInput
         name: input.name.trim(),
         client: input.client.trim(),
         location: normalizedLocation,
+        startDate: input.startDate?.trim() || null,
+        endDate: input.endDate?.trim() || null,
         status: input.status,
       })
       .returning();
@@ -73,6 +125,8 @@ export async function createProjectWithOwner(userId: string, input: ProjectInput
         code: created.code,
         name: created.name,
         client: created.client,
+        startDate: created.startDate,
+        endDate: created.endDate,
         status: created.status,
       },
     });
@@ -93,6 +147,8 @@ export async function updateProjectRecord(projectId: string, actorId: string, in
         name: input.name.trim(),
         client: input.client.trim(),
         location: normalizedLocation,
+        startDate: input.startDate?.trim() || null,
+        endDate: input.endDate?.trim() || null,
         status: input.status,
       })
       .where(eq(projects.id, projectId))
@@ -110,6 +166,8 @@ export async function updateProjectRecord(projectId: string, actorId: string, in
         code: updated.code,
         name: updated.name,
         client: updated.client,
+        startDate: updated.startDate,
+        endDate: updated.endDate,
         status: updated.status,
       },
     });
@@ -135,6 +193,37 @@ export async function updateProjectStatusRecord(projectId: string, actorId: stri
       entityType: "project",
       entityId: updated.id,
       metadata: { status },
+    });
+
+    return updated;
+  });
+}
+
+export async function updateProjectConfigurationRecord(
+  projectId: string,
+  actorId: string,
+  configuration: ProjectConfiguration
+) {
+  return getDb().transaction(async (tx) => {
+    const [updated] = await tx
+      .update(projects)
+      .set({ configuration })
+      .where(eq(projects.id, projectId))
+      .returning();
+
+    if (!updated) throw new Error("Project not found");
+
+    await tx.insert(auditLogs).values({
+      projectId: updated.id,
+      actorId,
+      action: "project.configuration_updated",
+      entityType: "project",
+      entityId: updated.id,
+      metadata: {
+        template: configuration.template,
+        defaultUnit: configuration.defaultUnit,
+        scaffoldInspectionCycleDays: configuration.scaffoldInspectionCycleDays,
+      },
     });
 
     return updated;

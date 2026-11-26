@@ -43,6 +43,13 @@
       "when": 1795714871698,
       "tag": "0005_legal_franklin_richards",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1795718845541,
+      "tag": "0006_classy_fat_cobra",
+      "breakpoints": true
     }
   ]
 }

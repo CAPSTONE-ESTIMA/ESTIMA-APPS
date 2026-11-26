@@ -3,12 +3,24 @@ import { cookies } from "next/headers";
 import { requireProjectAccess, requireSession } from "@/server/auth/authorization";
 import {
   createProjectWithOwner,
+  findMembersOfProject,
   findProjectByIdForUser,
+  findProjectByIdOrCodeForUser,
   findProjectsForUser,
+  updateProjectConfigurationRecord,
   updateProjectRecord,
   updateProjectStatusRecord,
 } from "@/server/repositories/project.repository";
-import { projectInputSchema, type ProjectInput, type ProjectStatus, type ProjectSummary } from "@/features/project/schema";
+import {
+  normalizeProjectConfig,
+  projectConfigSchema,
+  projectInputSchema,
+  type ProjectConfiguration,
+  type ProjectDetail,
+  type ProjectInput,
+  type ProjectStatus,
+  type ProjectSummary,
+} from "@/features/project/schema";
 
 export const ACTIVE_PROJECT_COOKIE = "estima_active_project_id";
 
@@ -19,6 +31,29 @@ export async function listMyProjects(): Promise<ProjectSummary[]> {
     ...row,
     createdAt: row.createdAt.toISOString(),
   }));
+}
+
+export async function getProjectDetailByKey(keyOrId: string): Promise<ProjectDetail | null> {
+  const session = await requireSession();
+  const row = await findProjectByIdOrCodeForUser(decodeURIComponent(keyOrId), session.user.id);
+  if (!row) return null;
+
+  const members = await findMembersOfProject(row.id);
+
+  return {
+    id: row.id,
+    code: row.code,
+    name: row.name,
+    client: row.client,
+    location: row.location,
+    startDate: row.startDate,
+    endDate: row.endDate,
+    status: row.status,
+    role: row.role,
+    createdAt: row.createdAt.toISOString(),
+    configuration: normalizeProjectConfig(row.configuration),
+    members,
+  };
 }
 
 export async function getActiveProjectId(projectsList?: ProjectSummary[]): Promise<string | null> {
@@ -76,4 +111,13 @@ export async function updateProject(projectId: string, rawInput: ProjectInput) {
 export async function updateProjectStatus(projectId: string, status: ProjectStatus) {
   const { session } = await requireProjectAccess(projectId, ["manager"]);
   return updateProjectStatusRecord(projectId, session.user.id, status);
+}
+
+export async function updateProjectConfiguration(
+  projectId: string,
+  rawConfig: ProjectConfiguration
+) {
+  const { session } = await requireProjectAccess(projectId, ["manager"]);
+  const parsed = projectConfigSchema.parse(rawConfig);
+  return updateProjectConfigurationRecord(projectId, session.user.id, parsed);
 }

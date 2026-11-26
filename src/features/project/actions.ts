@@ -6,9 +6,10 @@ import {
   createProject,
   setActiveProjectForUser,
   updateProject,
+  updateProjectConfiguration,
   updateProjectStatus,
 } from "@/server/services/project.service";
-import type { ProjectInput, ProjectStatus } from "./schema";
+import type { ProjectConfiguration, ProjectInput, ProjectStatus } from "./schema";
 
 export type ActionResult<T = undefined> =
   | { ok: true; data?: T }
@@ -49,6 +50,7 @@ export async function updateProjectAction(projectId: string, input: ProjectInput
     revalidatePath("/", "layout");
     revalidatePath("/dashboard");
     revalidatePath("/projects");
+    revalidatePath(`/projects/${projectId}`);
     return { ok: true };
   } catch (err) {
     return { ok: false, error: formatActionError(err) };
@@ -61,6 +63,20 @@ export async function updateProjectStatusAction(projectId: string, status: Proje
     revalidatePath("/", "layout");
     revalidatePath("/dashboard");
     revalidatePath("/projects");
+    return { ok: true };
+  } catch (err) {
+    return { ok: false, error: formatActionError(err) };
+  }
+}
+
+export async function updateProjectConfigAction(
+  projectId: string,
+  config: ProjectConfiguration
+): Promise<ActionResult> {
+  try {
+    await updateProjectConfiguration(projectId, config);
+    revalidatePath("/projects");
+    revalidatePath(`/projects/${projectId}`);
     return { ok: true };
   } catch (err) {
     return { ok: false, error: formatActionError(err) };

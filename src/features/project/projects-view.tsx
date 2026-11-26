@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState, useTransition } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
   Plus,
@@ -12,6 +13,8 @@ import {
   Archive,
   FolderKanban,
   PlayCircle,
+  Calendar,
+  ExternalLink,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -134,7 +137,7 @@ export function ProjectsView({ projects, activeProjectId }: ProjectsViewProps) {
             Manajemen Proyek
           </h1>
           <p className="mt-1 text-sm text-muted-foreground">
-            Daftar proyek scaffolding &amp; insulation, konfigurasi status, serta pemilihan workspace aktif.
+            Master proyek scaffolding &amp; insulation, jadwal durasi, konfigurasi dasar, serta pemilihan workspace aktif.
           </p>
         </div>
         <Button onClick={openCreateModal}>
@@ -255,7 +258,7 @@ export function ProjectsView({ projects, activeProjectId }: ProjectsViewProps) {
                 <tr className="border-b border-border bg-slate-50 text-xs font-semibold uppercase tracking-wide text-slate-600">
                   <th className="px-4 py-3">Kode</th>
                   <th className="px-4 py-3">Nama Proyek &amp; Lokasi</th>
-                  <th className="px-4 py-3">Klien</th>
+                  <th className="px-4 py-3">Klien &amp; Periode</th>
                   <th className="px-4 py-3">Status</th>
                   <th className="px-4 py-3">Role</th>
                   <th className="px-4 py-3 text-right">Aksi</th>
@@ -266,6 +269,7 @@ export function ProjectsView({ projects, activeProjectId }: ProjectsViewProps) {
                   const isActiveWorkspace = project.id === activeProjectId;
                   const meta = STATUS_META[project.status];
                   const canManage = project.role === "manager";
+                  const detailHref = `/projects/${encodeURIComponent(project.code)}`;
 
                   return (
                     <tr
@@ -277,9 +281,12 @@ export function ProjectsView({ projects, activeProjectId }: ProjectsViewProps) {
                     >
                       <td className="whitespace-nowrap px-4 py-3.5 align-top">
                         <div className="flex items-center gap-2">
-                          <span className="rounded border border-slate-200 bg-slate-100 px-2 py-0.5 font-mono text-xs font-semibold text-slate-800">
+                          <Link
+                            href={detailHref}
+                            className="rounded border border-slate-200 bg-slate-100 px-2 py-0.5 font-mono text-xs font-semibold text-slate-800 hover:border-blue-400 hover:text-blue-700"
+                          >
                             {project.code}
-                          </span>
+                          </Link>
                           {isActiveWorkspace && (
                             <span
                               title="Proyek Aktif Saat Ini"
@@ -293,7 +300,12 @@ export function ProjectsView({ projects, activeProjectId }: ProjectsViewProps) {
                       </td>
 
                       <td className="px-4 py-3.5 align-top">
-                        <p className="font-medium text-foreground">{project.name}</p>
+                        <Link
+                          href={detailHref}
+                          className="font-medium text-foreground hover:text-blue-700 hover:underline"
+                        >
+                          {project.name}
+                        </Link>
                         {project.location && (
                           <p className="mt-1 flex items-center gap-1 text-xs text-muted-foreground">
                             <MapPin className="size-3.5 shrink-0 text-slate-400" />
@@ -307,6 +319,12 @@ export function ProjectsView({ projects, activeProjectId }: ProjectsViewProps) {
                           <Building2 className="size-3.5 text-slate-400" />
                           {project.client}
                         </span>
+                        {(project.startDate || project.endDate) && (
+                          <p className="mt-1 flex items-center gap-1 font-mono text-[11px] text-muted-foreground">
+                            <Calendar className="size-3 text-slate-400" />
+                            {project.startDate || "—"} → {project.endDate || "—"}
+                          </p>
+                        )}
                       </td>
 
                       <td className="whitespace-nowrap px-4 py-3.5 align-top">
@@ -328,6 +346,13 @@ export function ProjectsView({ projects, activeProjectId }: ProjectsViewProps) {
 
                       <td className="whitespace-nowrap px-4 py-3.5 text-right align-top">
                         <div className="inline-flex items-center justify-end gap-1.5">
+                          <Button asChild size="sm" variant="outline">
+                            <Link href={detailHref}>
+                              <ExternalLink className="size-3.5" />
+                              Detail
+                            </Link>
+                          </Button>
+
                           {!isActiveWorkspace && (
                             <Button
                               size="sm"
@@ -349,7 +374,6 @@ export function ProjectsView({ projects, activeProjectId }: ProjectsViewProps) {
                               aria-label={`Edit ${project.name}`}
                             >
                               <Pencil className="size-3.5" />
-                              Edit
                             </Button>
                           )}
 
