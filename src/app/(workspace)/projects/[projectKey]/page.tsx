@@ -6,6 +6,7 @@ import {
   getProjectDetailByKey,
   listMyProjects,
 } from "@/server/services/project.service";
+import { listProjectAuditHistory } from "@/server/services/audit.service";
 import { ProjectDetailView } from "@/features/project/project-detail-view";
 
 export const metadata: Metadata = {
@@ -23,13 +24,17 @@ export default async function ProjectDetailPage({
   const project = await getProjectDetailByKey(projectKey);
   if (!project) notFound();
 
-  const myProjects = await listMyProjects();
+  const [myProjects, auditHistory] = await Promise.all([
+    listMyProjects(),
+    listProjectAuditHistory(project.id, 12),
+  ]);
   const activeProjectId = await getActiveProjectId(myProjects);
 
   return (
     <ProjectDetailView
       project={project}
       isActiveWorkspace={project.id === activeProjectId}
+      auditHistory={auditHistory}
     />
   );
 }

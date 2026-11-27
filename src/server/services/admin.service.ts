@@ -3,11 +3,11 @@ import { requireProjectAccess, requireSession } from "@/server/auth/authorizatio
 import {
   createUserWithCredentialRecord,
   listAllUsersRecord,
-  listAuditLogsRecord,
   listProjectMembersRecord,
   removeProjectMemberRecord,
   upsertProjectMemberRecord,
 } from "@/server/repositories/admin.repository";
+import { listAuditTrail } from "@/server/services/audit.service";
 import {
   assignMemberSchema,
   createUserSchema,
@@ -44,13 +44,13 @@ export async function getAdminOverview(activeProjectId: string | null): Promise<
     }
   }
 
-  const [usersRaw, membersRaw, logsRaw] = await Promise.all([
+  const [usersRaw, membersRaw, auditLogs] = await Promise.all([
     isSystemAdmin ? listAllUsersRecord() : Promise.resolve([]),
     activeProjectId && canViewProject ? listProjectMembersRecord(activeProjectId) : Promise.resolve([]),
     isSystemAdmin
-      ? listAuditLogsRecord(null, 80)
+      ? listAuditTrail({ projectId: null, limit: 150 })
       : activeProjectId && canViewProject
-      ? listAuditLogsRecord(activeProjectId, 80)
+      ? listAuditTrail({ projectId: activeProjectId, limit: 150 })
       : Promise.resolve([]),
   ]);
 
@@ -58,7 +58,7 @@ export async function getAdminOverview(activeProjectId: string | null): Promise<
     isSystemAdmin,
     users: usersRaw.map((u) => ({ ...u, createdAt: u.createdAt.toISOString() })),
     members: membersRaw,
-    auditLogs: logsRaw.map((l) => ({ ...l, createdAt: l.createdAt.toISOString() })),
+    auditLogs,
   };
 }
 

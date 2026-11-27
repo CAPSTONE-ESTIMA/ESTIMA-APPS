@@ -1,7 +1,8 @@
 import "server-only";
 import { and, desc, eq, or } from "drizzle-orm";
 import { getDb } from "@/server/db";
-import { auditLogs, projectMembers, projects, user } from "@/server/db/schema";
+import { projectMembers, projects, user } from "@/server/db/schema";
+import { writeAuditEvent } from "@/server/services/audit.service";
 import type {
   ProjectConfiguration,
   ProjectInput,
@@ -115,16 +116,18 @@ export async function createProjectWithOwner(userId: string, input: ProjectInput
       role: "manager",
     });
 
-    await tx.insert(auditLogs).values({
+    await writeAuditEvent(tx, {
       projectId: created.id,
       actorId: userId,
       action: "project.created",
       entityType: "project",
       entityId: created.id,
-      metadata: {
+      summary: `Membuat proyek baru [${created.code}] ${created.name}`,
+      after: {
         code: created.code,
         name: created.name,
         client: created.client,
+        location: created.location,
         startDate: created.startDate,
         endDate: created.endDate,
         status: created.status,
@@ -140,6 +143,14 @@ export async function updateProjectRecord(projectId: string, actorId: string, in
   const normalizedLocation = input.location?.trim() || null;
 
   return getDb().transaction(async (tx) => {
+    const [existing] = await tx
+      .select()
+      .from(projects)
+      .where(eq(projects.id, projectId))
+      .limit(1);
+
+    if (!existing) throw new Error("Project not found");
+
     const [updated] = await tx
       .update(projects)
       .set({
@@ -156,16 +167,26 @@ export async function updateProjectRecord(projectId: string, actorId: string, in
 
     if (!updated) throw new Error("Project not found");
 
-    await tx.insert(auditLogs).values({
+    await writeAuditEvent(tx, {
       projectId: updated.id,
       actorId,
       action: "project.updated",
       entityType: "project",
       entityId: updated.id,
-      metadata: {
+      before: {
+        code: existing.code,
+        name: existing.name,
+        client: existing.client,
+        location: existing.location,
+        startDate: existing.startDate,
+        endDate: existing.endDate,
+        status: existing.status,
+      },
+      after: {
         code: updated.code,
         name: updated.name,
         client: updated.client,
+        location: updated.location,
         startDate: updated.startDate,
         endDate: updated.endDate,
         status: updated.status,
@@ -178,6 +199,14 @@ export async function updateProjectRecord(projectId: string, actorId: string, in
 
 export async function updateProjectStatusRecord(projectId: string, actorId: string, status: ProjectStatus) {
   return getDb().transaction(async (tx) => {
+    const [existing] = await tx
+      .select({ status: projects.status, code: projects.code })
+      .from(projects)
+      .where(eq(projects.id, projectId))
+      .limit(1);
+
+    if (!existing) throw new Error("Project not found");
+
     const [updated] = await tx
       .update(projects)
       .set({ status })
@@ -186,13 +215,15 @@ export async function updateProjectStatusRecord(projectId: string, actorId: stri
 
     if (!updated) throw new Error("Project not found");
 
-    await tx.insert(auditLogs).values({
+    await writeAuditEvent(tx, {
       projectId: updated.id,
       actorId,
       action: "project.status_changed",
       entityType: "project",
       entityId: updated.id,
-      metadata: { status },
+      summary: `Status proyek [${existing.code}] berubah: ${existing.status} → ${updated.status}`,
+      before: { status: existing.status },
+      after: { status: updated.status },
     });
 
     return updated;
@@ -205,6 +236,14 @@ export async function updateProjectConfigurationRecord(
   configuration: ProjectConfiguration
 ) {
   return getDb().transaction(async (tx) => {
+    const [existing] = await tx
+      .select({ configuration: projects.configuration, code: projects.code })
+      .from(projects)
+      .where(eq(projects.id, projectId))
+      .limit(1);
+
+    if (!existing) throw new Error("Project not found");
+
     const [updated] = await tx
       .update(projects)
       .set({ configuration })
@@ -213,16 +252,16 @@ export async function updateProjectConfigurationRecord(
 
     if (!updated) throw new Error("Project not found");
 
-    await tx.insert(auditLogs).values({
+    await writeAuditEvent(tx, {
       projectId: updated.id,
       actorId,
       action: "project.configuration_updated",
       entityType: "project",
       entityId: updated.id,
+      before: existing.configuration,
+      after: updated.configuration,
       metadata: {
-        template: configuration.template,
-        defaultUnit: configuration.defaultUnit,
-        scaffoldInspectionCycleDays: configuration.scaffoldInspectionCycleDays,
+        projectCode: existing.code,
       },
     });
 

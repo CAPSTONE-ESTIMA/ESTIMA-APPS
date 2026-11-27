@@ -1,7 +1,8 @@
 import "server-only";
 import { and, desc, eq } from "drizzle-orm";
 import { getDb } from "@/server/db";
-import { auditLogs, scaffolds } from "@/server/db/schema";
+import { scaffolds } from "@/server/db/schema";
+import { writeAuditEvent } from "@/server/services/audit.service";
 import type { ScaffoldInput, ScaffoldStatus, ScaffoldTagStatus } from "@/features/scaffolding/schema";
 
 export async function listScaffoldsByProject(projectId: string) {
@@ -40,14 +41,17 @@ export async function createScaffoldRecord(projectId: string, actorId: string, i
       })
       .returning();
 
-    await tx.insert(auditLogs).values({
+    await writeAuditEvent(tx, {
       projectId,
       actorId,
       action: "scaffold.created",
       entityType: "scaffold",
       entityId: created.id,
-      metadata: {
+      summary: `Membuat scaffold [${created.scaffoldCode}] di ${created.area} (${created.status})`,
+      after: {
         scaffoldCode: created.scaffoldCode,
+        area: created.area,
+        location: created.location,
         status: created.status,
         tagStatus: created.tagStatus,
       },
@@ -66,6 +70,14 @@ export async function updateScaffoldRecord(
   const normalizedCode = input.scaffoldCode.trim().toUpperCase();
 
   return getDb().transaction(async (tx) => {
+    const [existing] = await tx
+      .select()
+      .from(scaffolds)
+      .where(and(eq(scaffolds.id, scaffoldId), eq(scaffolds.projectId, projectId)))
+      .limit(1);
+
+    if (!existing) throw new Error("Scaffold tidak ditemukan.");
+
     const [updated] = await tx
       .update(scaffolds)
       .set({
@@ -92,16 +104,31 @@ export async function updateScaffoldRecord(
 
     if (!updated) throw new Error("Scaffold tidak ditemukan.");
 
-    await tx.insert(auditLogs).values({
+    await writeAuditEvent(tx, {
       projectId,
       actorId,
       action: "scaffold.updated",
       entityType: "scaffold",
       entityId: updated.id,
-      metadata: {
+      before: {
+        scaffoldCode: existing.scaffoldCode,
+        area: existing.area,
+        location: existing.location,
+        status: existing.status,
+        tagStatus: existing.tagStatus,
+        lengthM: existing.lengthM,
+        widthM: existing.widthM,
+        heightM: existing.heightM,
+      },
+      after: {
         scaffoldCode: updated.scaffoldCode,
+        area: updated.area,
+        location: updated.location,
         status: updated.status,
         tagStatus: updated.tagStatus,
+        lengthM: updated.lengthM,
+        widthM: updated.widthM,
+        heightM: updated.heightM,
       },
     });
 
@@ -117,6 +144,18 @@ export async function updateScaffoldStatusRecord(
   tagStatus: ScaffoldTagStatus
 ) {
   return getDb().transaction(async (tx) => {
+    const [existing] = await tx
+      .select({
+        scaffoldCode: scaffolds.scaffoldCode,
+        status: scaffolds.status,
+        tagStatus: scaffolds.tagStatus,
+      })
+      .from(scaffolds)
+      .where(and(eq(scaffolds.id, scaffoldId), eq(scaffolds.projectId, projectId)))
+      .limit(1);
+
+    if (!existing) throw new Error("Scaffold tidak ditemukan.");
+
     const [updated] = await tx
       .update(scaffolds)
       .set({
@@ -129,17 +168,15 @@ export async function updateScaffoldStatusRecord(
 
     if (!updated) throw new Error("Scaffold tidak ditemukan.");
 
-    await tx.insert(auditLogs).values({
+    await writeAuditEvent(tx, {
       projectId,
       actorId,
       action: "scaffold.status_changed",
       entityType: "scaffold",
       entityId: updated.id,
-      metadata: {
-        scaffoldCode: updated.scaffoldCode,
-        status,
-        tagStatus,
-      },
+      summary: `Scaffold [${existing.scaffoldCode}] status: ${existing.status} → ${updated.status}, tag: ${existing.tagStatus} → ${updated.tagStatus}`,
+      before: { status: existing.status, tagStatus: existing.tagStatus },
+      after: { status: updated.status, tagStatus: updated.tagStatus },
     });
 
     return updated;
@@ -155,15 +192,20 @@ export async function deleteScaffoldRecord(projectId: string, scaffoldId: string
 
     if (!deleted) throw new Error("Scaffold tidak ditemukan.");
 
-    await tx.insert(auditLogs).values({
+    await writeAuditEvent(tx, {
       projectId,
       actorId,
       action: "scaffold.deleted",
       entityType: "scaffold",
       entityId: deleted.id,
-      metadata: {
+      summary: `Menghapus scaffold [${deleted.scaffoldCode}] dari ${deleted.area}`,
+      before: {
         scaffoldCode: deleted.scaffoldCode,
+        area: deleted.area,
+        status: deleted.status,
+        tagStatus: deleted.tagStatus,
       },
+      after: null,
     });
 
     return deleted;

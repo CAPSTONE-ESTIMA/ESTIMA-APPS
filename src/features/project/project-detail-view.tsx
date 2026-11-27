@@ -8,7 +8,10 @@ import {
   Building2,
   Calendar,
   CheckCircle2,
+  Eye,
+  History,
   Loader2,
+  Lock,
   MapPin,
   Pencil,
   PlayCircle,
@@ -18,6 +21,8 @@ import {
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+import type { AuditLogItem } from "@/features/administration/schema";
+import { AuditDetailModal } from "@/features/administration/audit-detail-modal";
 import {
   PROJECT_TEMPLATE_LABELS,
   projectTemplateValues,
@@ -31,6 +36,7 @@ import { ProjectFormModal } from "./project-form-modal";
 interface ProjectDetailViewProps {
   project: ProjectDetail;
   isActiveWorkspace: boolean;
+  auditHistory: AuditLogItem[];
 }
 
 const MODULE_TOGGLES: {
@@ -53,9 +59,11 @@ const MODULE_TOGGLES: {
 export function ProjectDetailView({
   project,
   isActiveWorkspace,
+  auditHistory,
 }: ProjectDetailViewProps) {
   const router = useRouter();
   const [editOpen, setEditOpen] = useState(false);
+  const [selectedAuditLog, setSelectedAuditLog] = useState<AuditLogItem | null>(null);
   const [config, setConfig] = useState<ProjectConfiguration>(project.configuration);
   const [feedback, setFeedback] = useState<{ type: "success" | "error"; text: string } | null>(null);
   const [isPending, startTransition] = useTransition();
@@ -262,8 +270,8 @@ export function ProjectDetailView({
                 </div>
 
                 <div>
-                  <label htmlFor="cfg-cycle" className="mb-1.5 block text-xs font-semibold uppercase text-slate-700">
-                    Siklus Insp (Hari)
+                  <label htmlFor="cfg-cycle" className="mb-1.5 block whitespace-nowrap text-xs font-semibold uppercase text-slate-700">
+                    Siklus (Hari)
                   </label>
                   <input
                     id="cfg-cycle"
@@ -355,7 +363,7 @@ export function ProjectDetailView({
                 </p>
               </div>
             </div>
-            <Button asChild size="sm" variant="outline">
+            <Button asChild size="sm" variant="outline" className="shrink-0 whitespace-nowrap">
               <Link href="/administration">Kelola Akses</Link>
             </Button>
           </div>
@@ -375,6 +383,90 @@ export function ProjectDetailView({
           </div>
         </section>
       </div>
+
+      {/* Project Audit Trail (Read-Only) */}
+      <section className="rounded-md border border-border bg-white p-6">
+        <div className="mb-4 flex flex-wrap items-center justify-between gap-3 border-b border-border pb-3">
+          <div className="flex items-center gap-2">
+            <History className="size-4 text-primary" />
+            <div>
+              <div className="flex items-center gap-2">
+                <h2 className="text-base font-semibold text-foreground">
+                  Riwayat Audit Proyek ({auditHistory.length})
+                </h2>
+                <span className="inline-flex items-center gap-1 rounded border border-slate-200 bg-slate-100 px-1.5 py-0.5 text-[10px] font-semibold uppercase text-slate-600">
+                  <Lock className="size-2.5" />
+                  Read-Only
+                </span>
+              </div>
+              <p className="text-xs text-muted-foreground">
+                Log permanen siapa, kapan, dan perubahan apa yang terjadi pada proyek ini.
+              </p>
+            </div>
+          </div>
+          <Button asChild size="sm" variant="outline" className="shrink-0 whitespace-nowrap">
+            <Link href="/administration">Lihat Semua Audit</Link>
+          </Button>
+        </div>
+
+        {auditHistory.length === 0 ? (
+          <p className="py-4 text-center text-sm text-muted-foreground">
+            Belum ada riwayat audit untuk proyek ini.
+          </p>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full border-collapse text-left text-xs">
+              <thead>
+                <tr className="border-b border-border bg-slate-50 font-semibold uppercase text-slate-600">
+                  <th className="px-3 py-2">Timestamp (UTC)</th>
+                  <th className="px-3 py-2">Actor</th>
+                  <th className="px-3 py-2">Action</th>
+                  <th className="px-3 py-2">Ringkasan Perubahan</th>
+                  <th className="px-3 py-2 text-right">Detail</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-border">
+                {auditHistory.map((log) => (
+                  <tr key={log.id} className="hover:bg-slate-50/80">
+                    <td className="whitespace-nowrap px-3 py-2.5 font-mono text-slate-600">
+                      {log.createdAt.replace("T", " ").slice(0, 19)}
+                    </td>
+                    <td className="whitespace-nowrap px-3 py-2.5">
+                      <span className="font-medium text-foreground">{log.actorName ?? "System"}</span>
+                    </td>
+                    <td className="whitespace-nowrap px-3 py-2.5">
+                      <span className="rounded border border-slate-200 bg-slate-100 px-1.5 py-0.5 font-mono text-[11px] font-semibold text-slate-800">
+                        {log.action}
+                      </span>
+                    </td>
+                    <td className="max-w-md truncate px-3 py-2.5 text-slate-700" title={log.summary}>
+                      {log.summary}
+                    </td>
+                    <td className="whitespace-nowrap px-3 py-2.5 text-right">
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="outline"
+                        onClick={() => setSelectedAuditLog(log)}
+                      >
+                        <Eye className="size-3.5" />
+                        Diff
+                      </Button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </section>
+
+      {selectedAuditLog && (
+        <AuditDetailModal
+          log={selectedAuditLog}
+          onClose={() => setSelectedAuditLog(null)}
+        />
+      )}
 
       {editOpen && (
         <ProjectFormModal
