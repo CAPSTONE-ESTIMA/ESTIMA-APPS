@@ -51,11 +51,14 @@ export interface ProjectMemberItem {
 export interface AuditLogItem {
   id: string;
   projectId: string | null;
+  projectCode: string | null;
+  actorId: string | null;
   actorName: string | null;
   actorEmail: string | null;
   action: string;
   entityType: string;
   entityId: string;
+  summary: string;
   metadata: Record<string, unknown>;
   createdAt: string;
 }

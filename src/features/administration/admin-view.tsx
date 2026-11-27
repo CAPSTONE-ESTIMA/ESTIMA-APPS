@@ -12,6 +12,9 @@ import {
   Trash2,
   Loader2,
   Search,
+  Lock,
+  Eye,
+  Download,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -31,6 +34,7 @@ import {
   createStaffUserAction,
   removeProjectMemberAction,
 } from "./actions";
+import { AuditDetailModal } from "./audit-detail-modal";
 
 interface AdminViewProps {
   currentUserId: string;
@@ -56,6 +60,8 @@ export function AdminView({
   const [selectedUserId, setSelectedUserId] = useState("");
   const [selectedRole, setSelectedRole] = useState<ProjectRole>("supervisor");
   const [auditSearch, setAuditSearch] = useState("");
+  const [auditEntityFilter, setAuditEntityFilter] = useState<string>("all");
+  const [selectedAuditLog, setSelectedAuditLog] = useState<AuditLogItem | null>(null);
   const [feedback, setFeedback] = useState<{ type: "success" | "error"; text: string } | null>(null);
   const [isPending, startTransition] = useTransition();
 
@@ -74,18 +80,61 @@ export function AdminView({
     },
   });
 
+  const entityTypes = useMemo(() => {
+    return Array.from(new Set(auditLogs.map((l) => l.entityType))).sort();
+  }, [auditLogs]);
+
   const filteredLogs = useMemo(() => {
     const q = auditSearch.trim().toLowerCase();
-    if (!q) return auditLogs;
-    return auditLogs.filter(
-      (l) =>
+    return auditLogs.filter((l) => {
+      if (auditEntityFilter !== "all" && l.entityType !== auditEntityFilter) {
+        return false;
+      }
+      if (!q) return true;
+      return (
         l.action.toLowerCase().includes(q) ||
         l.entityType.toLowerCase().includes(q) ||
+        l.entityId.toLowerCase().includes(q) ||
+        (l.projectCode ?? "").toLowerCase().includes(q) ||
+        l.summary.toLowerCase().includes(q) ||
         (l.actorName ?? "").toLowerCase().includes(q) ||
         (l.actorEmail ?? "").toLowerCase().includes(q) ||
         JSON.stringify(l.metadata).toLowerCase().includes(q)
-    );
-  }, [auditLogs, auditSearch]);
+      );
+    });
+  }, [auditLogs, auditSearch, auditEntityFilter]);
+
+  function handleExportAuditCsv() {
+    const headers = [
+      "Timestamp (UTC)",
+      "Actor Name",
+      "Actor Email",
+      "Project",
+      "Action",
+      "Entity Type",
+      "Entity ID",
+      "Summary",
+    ];
+    const escapeCell = (val: string) => `"${val.replace(/"/g, '""')}"`;
+    const rows = filteredLogs.map((l) => [
+      l.createdAt,
+      l.actorName ?? "System",
+      l.actorEmail ?? "",
+      l.projectCode ?? l.projectId ?? "Global",
+      l.action,
+      l.entityType,
+      l.entityId,
+      l.summary,
+    ]);
+    const csv = [headers, ...rows].map((r) => r.map(escapeCell).join(",")).join("\n");
+    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `estima-audit-trail-${new Date().toISOString().slice(0, 10)}.csv`;
+    link.click();
+    URL.revokeObjectURL(url);
+  }
 
   const canManageProjectMembers = activeProject?.role === "manager";
 
@@ -486,18 +535,61 @@ export function AdminView({
         </div>
       )}
 
-      {/* TAB 3: AUDIT TRAIL */}
+      {/* TAB 3: AUDIT TRAIL (APPEND-ONLY / READ-ONLY) */}
       {tab === "audit" && (
         <div className="space-y-4">
-          <div className="relative max-w-md">
-            <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-slate-400" />
-            <input
-              type="search"
-              value={auditSearch}
-              onChange={(e) => setAuditSearch(e.target.value)}
-              placeholder="Cari aksi, entitas, aktor, atau metadata..."
-              className="h-9 w-full rounded-md border border-slate-300 bg-white pl-9 pr-3 text-sm focus:border-blue-600 focus:outline-none"
-            />
+          <div className="flex flex-wrap items-center justify-between gap-3 rounded-md border border-blue-200 bg-blue-50/70 px-4 py-2.5 text-xs text-blue-900">
+            <div className="flex items-center gap-2">
+              <Lock className="size-3.5 shrink-0 text-blue-700" />
+              <span>
+                <strong>Immutable Audit Trail (Read-Only):</strong> Setiap perubahan data proyek
+                dan modul dicatat otomatis dalam transaksi database dan tidak dapat diedit maupun
+                dihapus melalui UI.
+              </span>
+            </div>
+            <span className="font-mono text-[11px] font-semibold text-blue-800">
+              {filteredLogs.length} / {auditLogs.length} event
+            </span>
+          </div>
+
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div className="flex flex-wrap items-center gap-2.5">
+              <div className="relative w-72 max-w-full">
+                <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-slate-400" />
+                <input
+                  type="search"
+                  value={auditSearch}
+                  onChange={(e) => setAuditSearch(e.target.value)}
+                  placeholder="Cari aksi, entitas, aktor, atau ringkasan..."
+                  className="h-9 w-full rounded-md border border-slate-300 bg-white pl-9 pr-3 text-sm focus:border-blue-600 focus:outline-none"
+                />
+              </div>
+
+              <select
+                aria-label="Filter tipe entitas audit"
+                value={auditEntityFilter}
+                onChange={(e) => setAuditEntityFilter(e.target.value)}
+                className="h-9 rounded-md border border-slate-300 bg-white px-3 text-sm text-slate-700 focus:border-blue-600 focus:outline-none"
+              >
+                <option value="all">Semua Entitas ({entityTypes.length})</option>
+                {entityTypes.map((et) => (
+                  <option key={et} value={et}>
+                    {et}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              disabled={filteredLogs.length === 0}
+              onClick={handleExportAuditCsv}
+            >
+              <Download className="size-3.5" />
+              Export CSV
+            </Button>
           </div>
 
           <div className="overflow-hidden rounded-md border border-border bg-white">
@@ -509,13 +601,14 @@ export function AdminView({
                     <th className="px-4 py-2.5">Actor</th>
                     <th className="px-4 py-2.5">Action</th>
                     <th className="px-4 py-2.5">Entity</th>
-                    <th className="px-4 py-2.5">Detail Metadata</th>
+                    <th className="px-4 py-2.5">Ringkasan Perubahan</th>
+                    <th className="px-4 py-2.5 text-right">Detail</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-border">
                   {filteredLogs.length === 0 ? (
                     <tr>
-                      <td colSpan={5} className="px-4 py-8 text-center text-sm text-muted-foreground">
+                      <td colSpan={6} className="px-4 py-8 text-center text-sm text-muted-foreground">
                         Tidak ada log audit yang ditemukan.
                       </td>
                     </tr>
@@ -536,11 +629,33 @@ export function AdminView({
                             {log.action}
                           </span>
                         </td>
-                        <td className="whitespace-nowrap px-4 py-2.5 font-mono text-xs text-slate-600">
-                          {log.entityType}
+                        <td className="whitespace-nowrap px-4 py-2.5 text-xs">
+                          <p className="font-mono font-medium text-slate-700">
+                            {log.entityType}
+                            {log.projectCode && (
+                              <span className="ml-1.5 rounded bg-slate-100 px-1.5 py-0.5 text-[10px] text-slate-600">
+                                {log.projectCode}
+                              </span>
+                            )}
+                          </p>
+                          <p className="font-mono text-[10px] text-muted-foreground" title={log.entityId}>
+                            {log.entityId.slice(0, 14)}
+                            {log.entityId.length > 14 ? "…" : ""}
+                          </p>
                         </td>
-                        <td className="max-w-md truncate px-4 py-2.5 font-mono text-[11px] text-muted-foreground">
-                          {JSON.stringify(log.metadata)}
+                        <td className="max-w-md truncate px-4 py-2.5 text-xs text-slate-700" title={log.summary}>
+                          {log.summary}
+                        </td>
+                        <td className="whitespace-nowrap px-4 py-2.5 text-right">
+                          <Button
+                            type="button"
+                            size="sm"
+                            variant="outline"
+                            onClick={() => setSelectedAuditLog(log)}
+                          >
+                            <Eye className="size-3.5" />
+                            Diff
+                          </Button>
                         </td>
                       </tr>
                     ))
@@ -550,6 +665,13 @@ export function AdminView({
             </div>
           </div>
         </div>
+      )}
+
+      {selectedAuditLog && (
+        <AuditDetailModal
+          log={selectedAuditLog}
+          onClose={() => setSelectedAuditLog(null)}
+        />
       )}
     </div>
   );
